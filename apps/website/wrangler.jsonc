@@ -1,0 +1,17 @@
+{
+  "$schema": "./node_modules/wrangler/config-schema.json",
+  "name": "forge-website",
+  "account_id": "0e3c5f2ac43af6e41deff7141d763bbd",
+  "compatibility_date": "2026-08-13",
+  "compatibility_flags": ["nodejs_compat"],
+  "main": "./worker/index.ts",
+  "routes": [
+    {
+      "pattern": "forge.phu-mi.com",
+      "custom_domain": true
+    }
+  ],
+  "observability": {
+    "enabled": true
+  }
+}

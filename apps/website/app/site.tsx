@@ -27,7 +27,7 @@ export function HomePage() {
       <div className="hero-glow" /><div className="eyebrow"><span className="live-dot" /> FORGE BETA IS NOW AVAILABLE</div>
       <h1>Where ideas become<br /><span>working software.</span></h1>
       <p className="hero-copy">One focused desktop for your AI agents, code, browser, terminal, and Git. From a request to a verified result—without losing the thread.</p>
-      <div className="hero-actions"><a className="button button-primary" href={release.downloads.windows.href} download><Download size={17} /> Download for Windows</a><a className="button button-secondary" href="/docs">Read the docs <ArrowRight size={16} /></a></div>
+      <div className="hero-actions"><a className="button button-primary" href={release.downloads.windows.available ? release.downloads.windows.href : "/download"} download={release.downloads.windows.available}><Download size={17} /> {release.downloads.windows.available ? "Download for Windows" : "View download status"}</a><a className="button button-secondary" href="/docs">Read the docs <ArrowRight size={16} /></a></div>
       <div className="hero-meta"><span><Check size={13} /> Free beta</span><span><Check size={13} /> Windows 10+</span><span>v{release.version}</span></div>
       <WorkspaceMockup />
     </section>
@@ -49,7 +49,7 @@ export function HomePage() {
 
     <section className="section page-pad"><div className="split-panel"><div className="panel-copy"><span className="kicker">BROWSER WORKSPACE</span><h2>Build it.<br />Then look at it.</h2><p>Forge detects your local development server and opens it beside your code. Your agent can inspect what rendered—not just what compiled.</p><ul><li><Check /> Automatic localhost detection</li><li><Check /> Embedded browser tabs</li><li><Check /> DOM and UI inspection</li></ul></div><BrowserCard /></div></section>
 
-    <section className="download-cta page-pad"><div className="cta-spark"><Sparkles /></div><span className="kicker">START FORGING</span><h2>Turn your next idea<br />into working software.</h2><p>Download the free beta for Windows. macOS and Linux are next.</p><a className="button button-light" href={release.downloads.windows.href} download><Download size={17} /> Download Forge v{release.version}</a></section>
+    <section className="download-cta page-pad"><div className="cta-spark"><Sparkles /></div><span className="kicker">START FORGING</span><h2>Turn your next idea<br />into working software.</h2><p>Forge is preparing its public Windows download. macOS and Linux are next.</p><a className="button button-light" href={release.downloads.windows.available ? release.downloads.windows.href : "/download"} download={release.downloads.windows.available}><Download size={17} /> {release.downloads.windows.available ? `Download Forge v${release.version}` : "View download status"}</a></section>
   </main></Shell>;
 }
 
