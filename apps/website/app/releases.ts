@@ -3,7 +3,7 @@ export const release = {
   channel: "Beta",
   releasedAt: "August 13, 2026",
   downloads: {
-    windows: { label: "Windows", detail: "Windows 10 or later · 64-bit", filename: "Forge-Setup-0.2.0.exe", href: "https://github.com/vathanakkongsothy/forge/releases/download/v0.2.0/Forge-Setup-0.2.0.exe", available: false },
+    windows: { label: "Windows", detail: "Windows 10 or later · 64-bit", filename: "Forge-Setup-0.2.0.exe", href: "#", available: false },
     macos: { label: "macOS", detail: "Apple silicon & Intel · Coming soon", filename: "Forge-0.2.0.dmg", href: "#", available: false },
     linux: { label: "Linux", detail: "AppImage · Coming soon", filename: "Forge-0.2.0.AppImage", href: "#", available: false },
   },
