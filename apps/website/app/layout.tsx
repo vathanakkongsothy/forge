@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import "./globals.css";
+import { PreferencesProvider } from "./preferences";
 
 export const metadata: Metadata = {
   title: {
@@ -23,5 +24,5 @@ export const metadata: Metadata = {
 };
 
 export default function RootLayout({ children }: Readonly<{ children: React.ReactNode }>) {
-  return <html lang="en"><body>{children}</body></html>;
+  return <html lang="en" data-theme="dark" suppressHydrationWarning><head><script dangerouslySetInnerHTML={{ __html: `(()=>{try{const t=localStorage.getItem('forge-theme');const l=localStorage.getItem('forge-language');document.documentElement.dataset.theme=t==='light'||t==='dark'?t:(matchMedia('(prefers-color-scheme: light)').matches?'light':'dark');document.documentElement.lang=l==='km'?'km':'en'}catch{}})()` }} /></head><body><PreferencesProvider>{children}</PreferencesProvider></body></html>;
 }
