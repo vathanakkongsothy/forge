@@ -12,6 +12,8 @@ import {
   type ChatBlock,
   type PendingDiff,
   type Project,
+  type SshProfile,
+  type DbProfile,
   type Thread,
   type ThreadStatus,
   type TodoItem,
@@ -23,6 +25,8 @@ export type PersistedState = {
   activeProjectId: string | null;
   activeThreadId: string | null;
   settings: AppSettings;
+  sshProfiles: SshProfile[];
+  dbProfiles: DbProfile[];
 };
 
 const EMPTY: PersistedState = {
@@ -31,6 +35,8 @@ const EMPTY: PersistedState = {
   activeProjectId: null,
   activeThreadId: null,
   settings: DEFAULT_SETTINGS,
+  sshProfiles: [],
+  dbProfiles: [],
 };
 
 type SqliteDb = {
@@ -68,6 +74,7 @@ export class WorkspaceDatabase {
     this.jsonPath = path.join(userDataDir, "workspace.json");
     this.sqlite = tryOpenSqlite(path.join(userDataDir, "forge.sqlite"));
     this.load();
+    this.clearStaleRunning();
   }
 
   private load(): void {
@@ -106,6 +113,48 @@ export class WorkspaceDatabase {
   setSettings(partial: Partial<AppSettings>): void {
     this.data.settings = { ...this.data.settings, ...partial };
     this.save();
+  }
+
+  get sshProfiles(): SshProfile[] {
+    return this.data.sshProfiles;
+  }
+
+  upsertSshProfile(profile: SshProfile): SshProfile {
+    const index = this.data.sshProfiles.findIndex((item) => item.id === profile.id);
+    if (index >= 0) this.data.sshProfiles[index] = profile;
+    else this.data.sshProfiles.unshift(profile);
+    this.save();
+    return profile;
+  }
+
+  removeSshProfile(id: string): void {
+    this.data.sshProfiles = this.data.sshProfiles.filter((item) => item.id !== id);
+    this.save();
+  }
+
+  getSshProfile(id: string): SshProfile | null {
+    return this.data.sshProfiles.find((item) => item.id === id) ?? null;
+  }
+
+  get dbProfiles(): DbProfile[] {
+    return this.data.dbProfiles;
+  }
+
+  upsertDbProfile(profile: DbProfile): DbProfile {
+    const index = this.data.dbProfiles.findIndex((item) => item.id === profile.id);
+    if (index >= 0) this.data.dbProfiles[index] = profile;
+    else this.data.dbProfiles.unshift(profile);
+    this.save();
+    return profile;
+  }
+
+  removeDbProfile(id: string): void {
+    this.data.dbProfiles = this.data.dbProfiles.filter((item) => item.id !== id);
+    this.save();
+  }
+
+  getDbProfile(id: string): DbProfile | null {
+    return this.data.dbProfiles.find((item) => item.id === id) ?? null;
   }
 
   get projects(): Project[] {
@@ -300,6 +349,18 @@ export class WorkspaceDatabase {
     return this.data.threads.find((t) => t.status === "running")?.id ?? null;
   }
 
+  clearStaleRunning(): string[] {
+    const cleared: string[] = [];
+    for (const thread of this.data.threads) {
+      if (thread.status !== "running") continue;
+      thread.status = "idle";
+      thread.updatedAt = Date.now();
+      cleared.push(thread.id);
+    }
+    if (cleared.length) this.save();
+    return cleared;
+  }
+
   browserState(projectId = this.data.activeProjectId): BrowserSessionState {
     const project = this.data.projects.find((p) => p.id === projectId);
     return cloneBrowser(project?.browser);
@@ -375,6 +436,8 @@ function hydrate(parsed: PersistedState): PersistedState {
     ...EMPTY,
     ...parsed,
     settings: { ...DEFAULT_SETTINGS, ...parsed.settings },
+    sshProfiles: parsed.sshProfiles ?? [],
+    dbProfiles: parsed.dbProfiles ?? [],
     projects: (parsed.projects ?? []).map((p) => ({
       ...p,
       browser: cloneBrowser(p.browser),

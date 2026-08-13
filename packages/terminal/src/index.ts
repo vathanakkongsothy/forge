@@ -96,14 +96,18 @@ export class TerminalManager {
   create(id: string, cwd: string, onData: (id: string, chunk: string) => void): PtyLike {
     const existing = this.sessions.get(id);
     if (existing) return existing;
-    const session = createPtySession(id, cwd);
-    this.sessions.set(id, session);
-    this.buffers.set(id, "");
+    return this.adopt(createPtySession(id, cwd), onData);
+  }
+
+  adopt(session: PtyLike, onData: (id: string, chunk: string) => void): PtyLike {
+    this.kill(session.id);
+    this.sessions.set(session.id, session);
+    this.buffers.set(session.id, "");
     session.onData((chunk) => {
-      const prev = this.buffers.get(id) ?? "";
+      const prev = this.buffers.get(session.id) ?? "";
       const next = (prev + chunk).slice(-80_000);
-      this.buffers.set(id, next);
-      onData(id, chunk);
+      this.buffers.set(session.id, next);
+      onData(session.id, chunk);
     });
     return session;
   }

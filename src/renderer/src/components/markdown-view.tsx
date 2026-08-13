@@ -17,7 +17,7 @@ export function MarkdownView({
   return (
     <div className={cn("forge-md", compact && "forge-md-compact", className)}>
       <ReactMarkdown remarkPlugins={[remarkGfm]} skipHtml components={components}>
-        {stabilizeMarkdown(markdown)}
+        {stabilizeMarkdown(autolinkMarkdown(markdown))}
       </ReactMarkdown>
     </div>
   );
@@ -30,10 +30,12 @@ const components: Components = {
         href={href}
         target="_blank"
         rel="noreferrer"
+        className="forge-md-link"
+        title={href}
         onClick={(event) => {
-          if (!href) return;
           event.preventDefault();
-          window.open(href, "_blank", "noopener,noreferrer");
+          event.stopPropagation();
+          if (href) void window.forge.openLink(href);
         }}
       >
         {children}
@@ -99,4 +101,17 @@ function CodeBlock({ lang, text, className }: { lang?: string; text: string; cla
 function stabilizeMarkdown(text: string): string {
   const fences = text.match(/```/g)?.length ?? 0;
   return fences % 2 === 1 ? `${text}\n\`\`\`` : text;
+}
+
+function autolinkMarkdown(text: string): string {
+  const parts = text.split(/(```[\s\S]*?```)/g);
+  return parts
+    .map((part) => {
+      if (part.startsWith("```")) return part;
+      return part.replace(/(^|[\s<(])((?:https?:\/\/)[^\s<>)"']+)/g, (full, prefix: string, url: string) => {
+        if (full.includes("](")) return full;
+        return `${prefix}[${url}](${url})`;
+      });
+    })
+    .join("");
 }

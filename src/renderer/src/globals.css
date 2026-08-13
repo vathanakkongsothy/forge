@@ -1,16 +1,55 @@
 @import "tailwindcss";
 
+:root,
+html[data-theme="dark"] {
+  color-scheme: dark;
+  --forge-bg: #0c0d10;
+  --forge-fg: #eceef1;
+  --forge-card: #14161b;
+  --forge-border: #2a2e37;
+  --forge-muted: #8b919c;
+  --forge-accent: #e0b044;
+  --forge-accent-fg: #1a1406;
+  --forge-secondary: #1b1e25;
+  --forge-code-bg: #0e1016;
+  --forge-code-bar: #14161b;
+  --forge-inline-code: #f0d48a;
+  --forge-scroll: #2f333d;
+  --forge-ok: #34d399;
+  --forge-err: #fca5a5;
+  --forge-info: #7dd3fc;
+}
+
+html[data-theme="light"] {
+  color-scheme: light;
+  --forge-bg: #f5f6f8;
+  --forge-fg: #1c2128;
+  --forge-card: #ffffff;
+  --forge-border: #d7dbe2;
+  --forge-muted: #5c6570;
+  --forge-accent: #9a6b0a;
+  --forge-accent-fg: #fff8e8;
+  --forge-secondary: #eef0f4;
+  --forge-code-bg: #f3f4f7;
+  --forge-code-bar: #e7e9ee;
+  --forge-inline-code: #8a5808;
+  --forge-scroll: #c5cad3;
+  --forge-ok: #047857;
+  --forge-err: #b91c1c;
+  --forge-info: #0369a1;
+}
+
 @theme {
   --font-sans: "Segoe UI", "IBM Plex Sans", ui-sans-serif, system-ui, sans-serif;
   --font-mono: "Cascadia Code", "IBM Plex Mono", ui-monospace, Consolas, monospace;
-  --color-background: #0c0d10;
-  --color-foreground: #eceef1;
-  --color-card: #14161b;
-  --color-border: #2a2e37;
-  --color-muted: #8b919c;
-  --color-accent: #e0b044;
-  --color-accent-foreground: #1a1406;
-  --color-secondary: #1b1e25;
+  --color-background: var(--forge-bg);
+  --color-foreground: var(--forge-fg);
+  --color-card: var(--forge-card);
+  --color-border: var(--forge-border);
+  --color-muted: var(--forge-muted);
+  --color-accent: var(--forge-accent);
+  --color-accent-foreground: var(--forge-accent-fg);
+  --color-secondary: var(--forge-secondary);
   --radius: 0.6rem;
 }
 
@@ -37,7 +76,7 @@ body {
   height: 10px;
 }
 ::-webkit-scrollbar-thumb {
-  background: #2f333d;
+  background: var(--forge-scroll);
   border-radius: 999px;
 }
 
@@ -118,10 +157,16 @@ details > summary::-webkit-details-marker {
   border-top: 1px solid var(--color-border);
   margin: 1em 0;
 }
-.forge-md a {
+.forge-md a,
+.forge-md-link {
   color: var(--color-accent);
   text-decoration: underline;
   text-underline-offset: 2px;
+  cursor: pointer;
+}
+.forge-md a:hover,
+.forge-md-link:hover {
+  opacity: 0.85;
 }
 .forge-md img {
   max-width: 100%;
@@ -134,13 +179,13 @@ details > summary::-webkit-details-marker {
   padding: 0.1em 0.35em;
   border-radius: 4px;
   background: var(--color-secondary);
-  color: #f0d48a;
+  color: var(--forge-inline-code);
 }
 .forge-md-code {
   overflow: hidden;
   border: 1px solid var(--color-border);
   border-radius: 10px;
-  background: #0e1016;
+  background: var(--forge-code-bg);
 }
 .forge-md-code-bar {
   display: flex;
@@ -149,7 +194,7 @@ details > summary::-webkit-details-marker {
   gap: 8px;
   padding: 0.35em 0.65em;
   border-bottom: 1px solid var(--color-border);
-  background: #14161b;
+  background: var(--forge-code-bar);
 }
 .forge-md-code-lang {
   font-family: var(--font-mono);

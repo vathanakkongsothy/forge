@@ -1,5 +1,6 @@
 import { lazy, Suspense, useEffect, useState } from "react";
-import { FolderOpen, Hammer } from "lucide-react";
+import { Cable, FolderOpen, Hammer, Moon, Sun } from "lucide-react";
+import { resolveTheme } from "@/lib/theme";
 import {
   APP_VERSION,
   DEFAULT_SETTINGS,
@@ -9,8 +10,10 @@ import {
   type AgentStreamEvent,
   type AppState,
   type PermissionRequest,
+  type ThemePreference,
 } from "@forge/shared";
 import { Button } from "@/components/ui/button";
+import { applyTheme } from "@/lib/theme";
 
 const Workspace = lazy(() => import("@/components/workspace").then((m) => ({ default: m.Workspace })));
 
@@ -25,6 +28,11 @@ const empty: AppState = {
   auth: EMPTY_AUTH,
   detectedUrls: [],
   browser: EMPTY_BROWSER,
+  browserAttached: false,
+  sshProfiles: [],
+  sshConnections: [],
+  dbProfiles: [],
+  dbConnections: [],
 };
 
 export function App() {
@@ -39,6 +47,17 @@ export function App() {
   }, [state.version]);
 
   useEffect(() => {
+    applyTheme(state.settings.theme ?? "system");
+  }, [state.settings.theme]);
+
+  useEffect(() => {
+    const media = window.matchMedia("(prefers-color-scheme: light)");
+    const onChange = () => applyTheme(state.settings.theme ?? "system");
+    media.addEventListener("change", onChange);
+    return () => media.removeEventListener("change", onChange);
+  }, [state.settings.theme]);
+
+  useEffect(() => {
     if (!window.forge) {
       console.error("Forge preload bridge is missing");
       return;
@@ -48,6 +67,20 @@ export function App() {
       if (event.type === "state") setState(event.state);
       if (event.type === "approval") setApproval(event.request);
       if (event.type === "dev-server") setOfferUrl(event.url);
+      if (event.type === "browser-focus") setOpenUrl(event.url);
+      if (event.type === "error") {
+        setState((prev) => ({
+          ...prev,
+          threads: prev.threads.map((thread) =>
+            thread.id === event.threadId
+              ? {
+                  ...thread,
+                  status: thread.status === "running" ? "error" : thread.status,
+                }
+              : thread,
+          ),
+        }));
+      }
       if (
         event.type === "text-delta" ||
         event.type === "reasoning" ||
@@ -63,7 +96,7 @@ export function App() {
   const project = state.projects.find((p) => p.id === state.activeProjectId);
 
   return (
-    <div className="relative h-full">
+    <div className="relative h-full bg-background text-foreground">
       {project ? (
         <Suspense
           fallback={
@@ -163,6 +196,21 @@ function Welcome({
           <Button variant="outline" onClick={onSettings}>
             Settings
           </Button>
+          <Button
+            variant="outline"
+            onClick={() =>
+              void window.forge.setSettings({
+                theme: resolveTheme(state.settings.theme ?? "system") === "dark" ? "light" : "dark",
+              })
+            }
+          >
+            {resolveTheme(state.settings.theme ?? "system") === "dark" ? (
+              <Sun className="h-4 w-4" />
+            ) : (
+              <Moon className="h-4 w-4" />
+            )}
+            {resolveTheme(state.settings.theme ?? "system") === "dark" ? "Light mode" : "Dark mode"}
+          </Button>
         </div>
         <AuthSummary auth={state.auth} />
         {state.projects.length ? (
@@ -177,6 +225,30 @@ function Welcome({
                 {p.name} <span className="text-xs text-muted">{p.path}</span>
               </button>
             ))}
+          </div>
+        ) : null}
+        {(state.sshProfiles ?? []).length ? (
+          <div className="mt-6">
+            <div className="mb-1 text-[10px] uppercase tracking-wide text-muted">SSH sessions</div>
+            <div className="space-y-1">
+              {state.sshProfiles.slice(0, 6).map((profile) => (
+                <button
+                  key={profile.id}
+                  type="button"
+                  className="flex w-full items-center gap-2 rounded-md px-2 py-1 text-left text-sm hover:bg-secondary"
+                  onClick={() => {
+                    if (state.projects[0]) void window.forge.openProject(state.projects[0].path);
+                    void window.forge.sshConnect(profile.id);
+                  }}
+                >
+                  <Cable className="h-3.5 w-3.5 text-accent" />
+                  <span className="truncate">{profile.name}</span>
+                  <span className="truncate font-mono text-[11px] text-muted">
+                    {profile.username}@{profile.host}
+                  </span>
+                </button>
+              ))}
+            </div>
           </div>
         ) : null}
       </div>
@@ -263,6 +335,16 @@ function SettingsModal({ state, onClose }: { state: AppState; onClose: () => voi
             {m.label}
           </option>
         ))}
+      </select>
+      <label className="mt-4 block text-[11px] uppercase tracking-wide text-muted">Appearance</label>
+      <select
+        value={state.settings.theme ?? "system"}
+        onChange={(e) => void window.forge.setSettings({ theme: e.target.value as ThemePreference })}
+        className="mt-1 w-full rounded-md border border-border bg-secondary px-2 py-1.5 text-sm"
+      >
+        <option value="system">System</option>
+        <option value="light">Light</option>
+        <option value="dark">Dark</option>
       </select>
       <label className="mt-4 block text-[11px] uppercase tracking-wide text-muted">Approvals</label>
       <select

@@ -69,6 +69,7 @@ function PlatformDetector() {
 }
 
 const khmerChanges = [
+  { version: "0.3.0", date: "13 សីហា 2026", channel: "Beta", groups: [{ title: "ថ្មី", items: ["Database workspace សម្រាប់ SQLite, PostgreSQL និង MySQL", "SSH profiles និង remote terminals ក្នុងកម្មវិធី", "Light និង dark themes ដែលរក្សាទុកការកំណត់"] }, { title: "បានកែលម្អ", items: ["Browser sessions និង inspector context", "តំណ និង file references ក្នុងចម្លើយរបស់ agent", "Terminal tabs និង tool activity feedback"] }, { title: "បានកែបញ្ហា", items: ["រក្សា browser preview ពេលប្តូរ workspace tabs", "ពណ៌ theme ស្របគ្នានៅ editor, terminal និង status"] }] },
   { version: "0.2.0", date: "13 សីហា 2026", channel: "Beta", groups: [{ title: "ថ្មី", items: ["Browser workspace ដែលរួមបញ្ចូល", "DOM inspector ក្នុងកម្មវិធី", "កម្មវិធីដំឡើង Windows"] }, { title: "បានកែលម្អ", items: ["ប្តូរគម្រោងលឿនជាងមុន", "Tool activity timeline កាន់តែច្បាស់", "ការអនុញ្ញាត command មានសុវត្ថិភាពជាងមុន"] }, { title: "បានកែបញ្ហា", items: ["Terminal reconnect បន្ទាប់ពីប្តូរគម្រោង", "ទំហំ browser preview"] }] },
   { version: "0.1.0", date: "5 សីហា 2026", channel: "Beta", groups: [{ title: "ថ្មី", items: ["Forge public beta ដំបូង", "Coding agent ដំណើរការដោយ Grok", "Editor, terminal, Git និង project explorer"] }] },
 ];

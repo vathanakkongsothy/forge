@@ -1,11 +1,12 @@
 import { spawn } from "node:child_process";
 import { randomUUID } from "node:crypto";
-import { mkdirSync, watch } from "node:fs";
+import { existsSync, mkdirSync, watch, writeFileSync } from "node:fs";
 import os from "node:os";
 import path from "node:path";
-import { app, BrowserWindow, dialog, ipcMain, shell, webContents } from "electron";
+import { fileURLToPath } from "node:url";
+import { app, BrowserWindow, dialog, ipcMain, nativeTheme, shell, webContents } from "electron";
 import { clearGrokSession, loginWithGrokOAuth } from "@forge/oauth";
-import { runAgent, stopAgent } from "@forge/agent-core";
+import { isAgentRunning, runAgent, stopAgent } from "@forge/agent-core";
 import type { BrowserWorkspace } from "@forge/browser";
 import { WorkspaceDatabase } from "@forge/database";
 import { gitCommit, gitSnapshot, gitStage, gitUnstage } from "@forge/git";
@@ -17,6 +18,11 @@ import {
   type AgentStreamEvent,
   type AppState,
   type PermissionRequest,
+  type DbConnectionState,
+  type DbEditOp,
+  type DbProfileInput,
+  type SshConnectionState,
+  type SshProfileInput,
 } from "@forge/shared";
 import { TerminalManager } from "@forge/terminal";
 import {
@@ -30,12 +36,19 @@ import {
 } from "@forge/tools";
 import { attachBrowserWorkspace } from "./cdp";
 import { getAuthStatus, hasApiKey, resolveAccessToken, saveApiKey } from "./secrets";
+import { isMutatingSql, openDatabase, type LiveDb } from "./db-manager";
+import { deleteDbSecret, readDbSecret, saveDbSecret } from "./db-secrets";
+import { createSshSession } from "./ssh";
+import { deleteSshSecret, readSshSecret, saveSshSecret } from "./ssh-secrets";
 
 const terminals = new TerminalManager();
 const approvals = new Map<string, (allow: boolean) => void>();
 let db: WorkspaceDatabase;
 const detectedUrls = new Set<string>();
 const browserHolder: { current?: BrowserWorkspace } = {};
+const sshStatus = new Map<string, SshConnectionState>();
+const dbLive = new Map<string, LiveDb>();
+const dbStatus = new Map<string, DbConnectionState>();
 let defaultTerminalId = "term-1";
 
 function emit(event: AgentStreamEvent): void {
@@ -53,6 +66,15 @@ function state(): AppState {
     auth: getAuthStatus(),
     detectedUrls: [...detectedUrls],
     browser: db.browserState(),
+    browserAttached: Boolean(browserHolder.current),
+    sshProfiles: db.sshProfiles,
+    sshConnections: db.sshProfiles.map(
+      (profile) => sshStatus.get(profile.id) ?? { profileId: profile.id, status: "disconnected" as const },
+    ),
+    dbProfiles: db.dbProfiles,
+    dbConnections: db.dbProfiles.map(
+      (profile) => dbStatus.get(profile.id) ?? { profileId: profile.id, status: "disconnected" as const },
+    ),
   };
 }
 
@@ -65,6 +87,10 @@ function pushState(): AppState {
 export function registerRuntime(userData: string): void {
   db = new WorkspaceDatabase(userData);
   watchGrokAuth();
+  applyWindowBackground(db.settings.theme);
+  nativeTheme.on("updated", () => {
+    if ((db.settings.theme ?? "system") === "system") applyWindowBackground("system");
+  });
 
   ipcMain.handle("forge:getState", () => state());
 
@@ -139,6 +165,32 @@ export function registerRuntime(userData: string): void {
 
   ipcMain.handle("forge:openExternal", (_e, target: string) => shell.openPath(target));
 
+  ipcMain.handle("forge:openLink", async (_e, href: string) => {
+    const raw = String(href ?? "").trim();
+    if (!raw || /^javascript:/i.test(raw)) return { ok: false, action: "ignore" };
+    if (/^https?:\/\/(?:localhost|127\.0\.0\.1|0\.0\.0\.0|\[::1\]|192\.168\.\d+\.\d+|10\.\d+\.\d+\.\d+)(?::\d+)?/i.test(raw)) {
+      const url = normalizeBrowserUrl(raw);
+      db.recordBrowserVisit(url);
+      emit({ type: "browser-focus", url });
+      await browserHolder.current?.navigate(url).catch(() => undefined);
+      return { ok: true, action: "browser" };
+    }
+    if (/^https?:\/\//i.test(raw) || /^mailto:/i.test(raw)) {
+      await shell.openExternal(raw);
+      return { ok: true, action: "external" };
+    }
+    const root = db.activeProject?.path;
+    if (!root) return { ok: false, action: "ignore" };
+    let candidate = raw.startsWith("file:") ? fileURLToPath(raw) : raw.replace(/^<|>$/g, "");
+    if (!path.isAbsolute(candidate)) candidate = path.resolve(root, candidate);
+    const rel = path.relative(root, candidate);
+    if (rel.startsWith("..") || path.isAbsolute(rel) || !existsSync(candidate)) {
+      return { ok: false, action: "ignore" };
+    }
+    emit({ type: "open-file", path: candidate });
+    return { ok: true, action: "file" };
+  });
+
   ipcMain.handle("forge:gitSnapshot", () => {
     const root = db.activeProject?.path;
     if (!root) return null;
@@ -196,7 +248,213 @@ export function registerRuntime(userData: string): void {
 
   ipcMain.handle("forge:setSettings", (_e, partial) => {
     db.setSettings(partial);
+    if (partial.theme) applyWindowBackground(partial.theme);
     return pushState();
+  });
+
+  ipcMain.handle("forge:sshSave", (_e, input: SshProfileInput) => {
+    const id = input.id || randomUUID();
+    if (input.secret) saveSshSecret(id, input.secret);
+    else if (input.clearSecret) deleteSshSecret(id);
+    const existing = db.getSshProfile(id);
+    db.upsertSshProfile({
+      id,
+      name: input.name.trim() || `${input.username}@${input.host}`,
+      host: input.host.trim(),
+      port: Number(input.port) || 22,
+      username: input.username.trim(),
+      auth: input.auth,
+      keyPath: input.keyPath?.trim() || undefined,
+      hasSecret: Boolean(readSshSecret(id)),
+      lastConnectedAt: existing?.lastConnectedAt,
+    });
+    return pushState();
+  });
+
+  ipcMain.handle("forge:sshDelete", (_e, id: string) => {
+    terminals.kill(`ssh-${id}`);
+    deleteSshSecret(id);
+    sshStatus.delete(id);
+    db.removeSshProfile(id);
+    return pushState();
+  });
+
+  ipcMain.handle("forge:sshConnect", (_e, id: string) => {
+    const profile = db.getSshProfile(id);
+    if (!profile) throw new Error("SSH session not found.");
+    if (!profile.host || !profile.username) throw new Error("Host and username are required.");
+    if (!db.activeProject) {
+      const dir = path.join(app.getPath("userData"), "remotes", profile.id);
+      mkdirSync(dir, { recursive: true });
+      const note = path.join(dir, "README.md");
+      if (!existsSync(note)) {
+        writeFileSync(note, `# ${profile.name}\n\nSSH ${profile.username}@${profile.host}:${profile.port}\n`, "utf8");
+      }
+      db.upsertProject(dir);
+    }
+    const termId = `ssh-${profile.id}`;
+    const session = createSshSession(
+      termId,
+      { profile, secret: readSshSecret(profile.id) },
+      (status, error) => {
+        sshStatus.set(profile.id, { profileId: profile.id, status, error });
+        if (status === "connected") {
+          db.upsertSshProfile({ ...profile, lastConnectedAt: Date.now() });
+        }
+        pushState();
+      },
+    );
+    terminals.adopt(session, (sid, chunk) => {
+      for (const win of BrowserWindow.getAllWindows()) {
+        win.webContents.send("forge:term-data", { id: sid, chunk });
+      }
+    });
+    defaultTerminalId = termId;
+    emit({ type: "ssh-term", id: termId, title: profile.name });
+    return pushState();
+  });
+
+  ipcMain.handle("forge:sshDisconnect", (_e, id: string) => {
+    terminals.kill(`ssh-${id}`);
+    sshStatus.set(id, { profileId: id, status: "disconnected" });
+    return pushState();
+  });
+
+  ipcMain.handle("forge:sshPickKey", async (event) => {
+    const win = BrowserWindow.fromWebContents(event.sender);
+    const opts = { title: "Choose a private key", properties: ["openFile"] as Array<"openFile"> };
+    const result = win ? await dialog.showOpenDialog(win, opts) : await dialog.showOpenDialog(opts);
+    return result.canceled ? null : result.filePaths[0] ?? null;
+  });
+
+  ipcMain.handle("forge:dbSave", (_e, input: DbProfileInput) => {
+    const id = input.id || randomUUID();
+    if (input.secret) saveDbSecret(id, input.secret);
+    else if (input.clearSecret) deleteDbSecret(id);
+    const existing = db.getDbProfile(id);
+    db.upsertDbProfile({
+      id,
+      name: input.name.trim() || input.database || input.filePath || input.host || "Database",
+      engine: input.engine,
+      host: input.host?.trim() || undefined,
+      port: Number(input.port) || (input.engine === "postgres" ? 5432 : input.engine === "mysql" ? 3306 : undefined),
+      username: input.username?.trim() || undefined,
+      database: input.database?.trim() || undefined,
+      filePath: input.filePath?.trim() || undefined,
+      ssl: Boolean(input.ssl),
+      hasSecret: Boolean(readDbSecret(id)),
+      lastConnectedAt: existing?.lastConnectedAt,
+    });
+    return pushState();
+  });
+
+  ipcMain.handle("forge:dbDelete", async (_e, id: string) => {
+    await dbLive.get(id)?.close().catch(() => undefined);
+    dbLive.delete(id);
+    dbStatus.delete(id);
+    deleteDbSecret(id);
+    db.removeDbProfile(id);
+    return pushState();
+  });
+
+  ipcMain.handle("forge:dbConnect", async (_e, id: string) => {
+    const profile = db.getDbProfile(id);
+    if (!profile) throw new Error("Database connection not found.");
+    dbStatus.set(id, { profileId: id, status: "connecting" });
+    pushState();
+    try {
+      await dbLive.get(id)?.close().catch(() => undefined);
+      const live = await openDatabase(profile, readDbSecret(id));
+      dbLive.set(id, live);
+      db.upsertDbProfile({ ...profile, lastConnectedAt: Date.now() });
+      dbStatus.set(id, { profileId: id, status: "connected", currentDatabase: live.currentDatabase() ?? profile.database });
+    } catch (err) {
+      dbLive.delete(id);
+      dbStatus.set(id, {
+        profileId: id,
+        status: "error",
+        error: err instanceof Error ? err.message : String(err),
+      });
+      pushState();
+      throw err instanceof Error ? err : new Error(String(err));
+    }
+    return pushState();
+  });
+
+  ipcMain.handle("forge:dbDisconnect", async (_e, id: string) => {
+    await dbLive.get(id)?.close().catch(() => undefined);
+    dbLive.delete(id);
+    dbStatus.set(id, { profileId: id, status: "disconnected" });
+    return pushState();
+  });
+
+  ipcMain.handle("forge:dbDatabases", async (_e, id: string) => {
+    const live = liveDb(id);
+    const names = await live.databases();
+    const current = live.currentDatabase();
+    return names.map((name) => ({ name, current: name === current }));
+  });
+
+  ipcMain.handle("forge:dbOpen", async (_e, payload: { id: string; database: string }) => {
+    const profile = db.getDbProfile(payload.id);
+    if (!profile) throw new Error("Database connection not found.");
+    if (profile.engine === "sqlite") throw new Error("SQLite has a single file database.");
+    const name = String(payload.database ?? "").trim();
+    if (!name) throw new Error("Database name is required.");
+    const next = { ...profile, database: name, lastConnectedAt: Date.now() };
+    dbStatus.set(payload.id, { profileId: payload.id, status: "connecting", currentDatabase: name });
+    pushState();
+    try {
+      await dbLive.get(payload.id)?.close().catch(() => undefined);
+      const live = await openDatabase(next, readDbSecret(payload.id));
+      dbLive.set(payload.id, live);
+      db.upsertDbProfile(next);
+      dbStatus.set(payload.id, { profileId: payload.id, status: "connected", currentDatabase: live.currentDatabase() ?? name });
+    } catch (err) {
+      dbLive.delete(payload.id);
+      dbStatus.set(payload.id, {
+        profileId: payload.id,
+        status: "error",
+        error: err instanceof Error ? err.message : String(err),
+      });
+      pushState();
+      throw err instanceof Error ? err : new Error(String(err));
+    }
+    return pushState();
+  });
+
+  ipcMain.handle("forge:dbTables", async (_e, id: string) => {
+    return liveDb(id).tables();
+  });
+
+  ipcMain.handle("forge:dbColumns", async (_e, payload: { id: string; table: string; schema?: string }) => {
+    return liveDb(payload.id).columns(payload.table, payload.schema);
+  });
+
+  ipcMain.handle("forge:dbQuery", async (_e, payload: { id: string; sql: string; confirm?: boolean }) => {
+    const sql = String(payload.sql ?? "").trim();
+    if (!sql) throw new Error("SQL is empty.");
+    if (isMutatingSql(sql) && !payload.confirm) {
+      throw new Error("This statement changes data. Confirm to run it.");
+    }
+    return liveDb(payload.id).query(sql);
+  });
+
+  ipcMain.handle("forge:dbApplyEdits", async (_e, payload: { id: string; ops: DbEditOp[] }) => {
+    const ops = Array.isArray(payload.ops) ? payload.ops : [];
+    if (!ops.length) return { applied: 0 };
+    return liveDb(payload.id).applyEdits(ops);
+  });
+
+  ipcMain.handle("forge:dbPickSqlite", async (event) => {
+    const win = BrowserWindow.fromWebContents(event.sender);
+    const opts = {
+      title: "Open SQLite database",
+      properties: ["openFile"] as Array<"openFile">,
+      filters: [{ name: "SQLite", extensions: ["db", "sqlite", "sqlite3"] }, { name: "All files", extensions: ["*"] }],
+    };
+    const result = win ? await dialog.showOpenDialog(win, opts) : await dialog.showOpenDialog(opts);
+    return result.canceled ? null : result.filePaths[0] ?? null;
   });
 
   ipcMain.handle("forge:termCreate", (_e, payload: { id: string; cwd?: string }) => {
@@ -232,8 +490,10 @@ export function registerRuntime(userData: string): void {
     const session = attachBrowserWorkspace(wc, browserHolder);
     session.onNavigate = (url) => {
       db.recordBrowserVisit(url);
+      emit({ type: "browser-focus", url });
       pushState();
     };
+    pushState();
     return { ok: true };
   });
 
@@ -272,7 +532,9 @@ export function registerRuntime(userData: string): void {
   ipcMain.handle("forge:sendMessage", async (_e, payload: { threadId: string; text: string }) => {
     const key = await resolveAccessToken();
     if (!key) throw new Error("Sign in with Grok or add an XAI_API_KEY in Settings.");
-    if (db.runningThreadId()) throw new Error("An agent is already running.");
+    const stale = db.runningThreadId();
+    if (stale && !isAgentRunning(stale)) db.setThreadStatus(stale, "idle");
+    if (isAgentRunning()) throw new Error("An agent is already running. Press Stop and try again.");
     const root = db.workspaceRoot(payload.threadId);
     if (!root) throw new Error("No workspace.");
 
@@ -300,6 +562,7 @@ export function registerRuntime(userData: string): void {
       inspectedJson: browserHolder.current?.lastInspect
         ? JSON.stringify(browserHolder.current.lastInspect, null, 2)
         : undefined,
+      browserBrief: await describeBrowser(),
       abortSignal: controller.signal,
       context: {
         workspaceRoot: root,
@@ -309,6 +572,7 @@ export function registerRuntime(userData: string): void {
         runCommand: (command) => runInProject(root, command, payload.threadId),
         terminalOutput: (id) => terminals.output(id || defaultTerminalId),
         browser: () => browserHolder.current ?? null,
+        ensureBrowser,
       },
       hooks: {
         onText: (blockId, delta) => {
@@ -357,15 +621,23 @@ export function registerRuntime(userData: string): void {
           for (const url of urls) {
             detectedUrls.add(url);
             emit({ type: "dev-server", url });
+            emit({ type: "browser-focus", url });
           }
         },
       },
     })
       .catch((err) => {
+        const message = err instanceof Error ? err.message : String(err);
+        db.addBlock(payload.threadId, {
+          id: randomUUID(),
+          kind: "assistant",
+          text: `The agent stopped before it finished.\n\n${message}`,
+          createdAt: Date.now(),
+        });
         emit({
           type: "error",
           threadId: payload.threadId,
-          message: err instanceof Error ? err.message : String(err),
+          message,
         });
       })
       .finally(() => {
@@ -381,7 +653,10 @@ export function registerRuntime(userData: string): void {
 
   ipcMain.handle("forge:stop", (_e, threadId: string) => {
     stopAgent(threadId);
-    return { ok: true };
+    const target = threadId || db.runningThreadId();
+    if (target) db.setThreadStatus(target, "idle");
+    for (const id of db.clearStaleRunning()) stopAgent(id);
+    return pushState();
   });
 
   ipcMain.handle("forge:respondApproval", (_e, payload: { requestId: string; allow: boolean }) => {
@@ -446,6 +721,56 @@ function runInProject(
     });
     void threadId;
   });
+}
+
+function liveDb(id: string): LiveDb {
+  const live = dbLive.get(id);
+  if (!live) throw new Error("Connect to the database first.");
+  return live;
+}
+
+async function ensureBrowser(url?: string): Promise<import("@forge/browser").BrowserWorkspace> {
+  const target = url ? normalizeBrowserUrl(url) : browserHolder.current?.currentUrl || db.browserState().lastUrl || "about:blank";
+  emit({ type: "browser-focus", url: target });
+  if (url && browserHolder.current) {
+    await browserHolder.current.navigate(target).catch(() => undefined);
+    return browserHolder.current;
+  }
+  const deadline = Date.now() + 8000;
+  while (Date.now() < deadline) {
+    if (browserHolder.current) {
+      if (url) await browserHolder.current.navigate(target).catch(() => undefined);
+      return browserHolder.current;
+    }
+    await new Promise((resolve) => setTimeout(resolve, 150));
+  }
+  throw new Error("Browser did not attach. Click the Browser tab once, then try again.");
+}
+
+async function describeBrowser(): Promise<string> {
+  const session = browserHolder.current;
+  if (!session) return "status: disconnected — call browser_open to attach the preview.";
+  let url = session.currentUrl;
+  try {
+    url = await session.getUrl();
+  } catch {
+    /* keep cached url */
+  }
+  const errors = session.consoleDump(true).slice(-6);
+  const failed = session.networkDump(true).slice(-6);
+  return [
+    "status: connected",
+    `url: ${url || "(blank)"}`,
+    `inspect: ${session.lastInspect ? JSON.stringify(session.lastInspect) : "none"}`,
+    `console errors: ${errors.length ? errors.map((e) => e.text).join(" | ") : "(none)"}`,
+    `failed network: ${failed.length ? failed.map((n) => `${n.status ?? "fail"} ${n.url}`).join(" | ") : "(none)"}`,
+  ].join("\n");
+}
+
+function applyWindowBackground(theme: string): void {
+  const light = theme === "light" || (theme !== "dark" && !nativeTheme.shouldUseDarkColors);
+  const color = light ? "#f5f6f8" : "#0c0d10";
+  for (const win of BrowserWindow.getAllWindows()) win.setBackgroundColor(color);
 }
 
 function watchGrokAuth(): void {

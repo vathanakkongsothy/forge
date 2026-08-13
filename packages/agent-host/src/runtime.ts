@@ -1,6 +1,6 @@
 import { exec, spawn } from "node:child_process";
 import { randomUUID } from "node:crypto";
-import { runAgent, stopAgent } from "@forge/agent-core";
+import { isAgentRunning, runAgent, stopAgent } from "@forge/agent-core";
 import type { BrowserWorkspace } from "@forge/browser";
 import { WorkspaceDatabase } from "@forge/database";
 import { gitCommit, gitSnapshot, gitStage, gitUnstage } from "@forge/git";
@@ -61,6 +61,11 @@ export class ForgeRuntime {
       auth: getAuthStatus(this.dataDir),
       detectedUrls: [...this.detectedUrls],
       browser: this.db.browserState(),
+      browserAttached: Boolean(this.browserHolder.current),
+      sshProfiles: this.db.sshProfiles,
+      sshConnections: [],
+      dbProfiles: this.db.dbProfiles,
+      dbConnections: [],
     };
   }
 
@@ -172,7 +177,7 @@ export class ForgeRuntime {
         clearGrokSession();
         return this.pushState();
       case "setSettings":
-        this.db.setSettings(p as { model?: string; approvalMode?: "ask" | "allowlist" });
+        this.db.setSettings(p as { model?: string; approvalMode?: "ask" | "allowlist"; theme?: "system" | "light" | "dark" });
         return this.pushState();
       case "termCreate": {
         const cwd = String(p.cwd || this.db.activeProject?.path || process.cwd());
@@ -221,9 +226,13 @@ export class ForgeRuntime {
         return this.pushState();
       case "sendMessage":
         return this.sendMessage(String(p.threadId), String(p.text));
-      case "stop":
-        stopAgent(String(p.threadId));
-        return { ok: true };
+      case "stop": {
+        const threadId = String(p.threadId);
+        stopAgent(threadId);
+        if (threadId) this.db.setThreadStatus(threadId, "idle");
+        for (const id of this.db.clearStaleRunning()) stopAgent(id);
+        return this.pushState();
+      }
       case "respondApproval": {
         this.approvals.get(String(p.requestId))?.(Boolean(p.allow));
         this.approvals.delete(String(p.requestId));
@@ -237,7 +246,9 @@ export class ForgeRuntime {
   private async sendMessage(threadId: string, text: string): Promise<AppState> {
     const key = await resolveAccessToken(this.dataDir);
     if (!key) throw new Error("Sign in with Grok or add an XAI_API_KEY in Settings.");
-    if (this.db.runningThreadId()) throw new Error("An agent is already running.");
+    const stale = this.db.runningThreadId();
+    if (stale && !isAgentRunning(stale)) this.db.setThreadStatus(stale, "idle");
+    if (isAgentRunning()) throw new Error("An agent is already running. Press Stop and try again.");
     const root = this.db.workspaceRoot(threadId);
     if (!root) throw new Error("No workspace.");
 
@@ -318,10 +329,17 @@ export class ForgeRuntime {
       },
     })
       .catch((err) => {
+        const message = err instanceof Error ? err.message : String(err);
+        this.db.addBlock(threadId, {
+          id: randomUUID(),
+          kind: "assistant",
+          text: `The agent stopped before it finished.\n\n${message}`,
+          createdAt: Date.now(),
+        });
         this.emit({
           type: "error",
           threadId,
-          message: err instanceof Error ? err.message : String(err),
+          message,
         });
       })
       .finally(() => {

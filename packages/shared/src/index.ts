@@ -1,5 +1,5 @@
 export const APP_NAME = "Forge";
-export const APP_VERSION = "0.2.0";
+export const APP_VERSION = "0.3.0";
 
 export const MODELS = [
   { id: "grok-4.6", label: "Grok 4.6" },
@@ -103,9 +103,130 @@ export type Thread = {
   activities: Activity[];
 };
 
+export type ThemePreference = "system" | "light" | "dark";
+
+export type SshAuthMethod = "password" | "key" | "agent";
+
+export type SshProfile = {
+  id: string;
+  name: string;
+  host: string;
+  port: number;
+  username: string;
+  auth: SshAuthMethod;
+  keyPath?: string;
+  hasSecret: boolean;
+  lastConnectedAt?: number;
+};
+
+export type SshConnectionState = {
+  profileId: string;
+  status: "disconnected" | "connecting" | "connected" | "error";
+  error?: string;
+};
+
+export type SshProfileInput = {
+  id?: string;
+  name: string;
+  host: string;
+  port: number;
+  username: string;
+  auth: SshAuthMethod;
+  keyPath?: string;
+  secret?: string;
+  clearSecret?: boolean;
+};
+
+export type DbEngine = "sqlite" | "postgres" | "mysql";
+
+export type DbProfile = {
+  id: string;
+  name: string;
+  engine: DbEngine;
+  host?: string;
+  port?: number;
+  username?: string;
+  database?: string;
+  filePath?: string;
+  ssl?: boolean;
+  hasSecret: boolean;
+  lastConnectedAt?: number;
+};
+
+export type DbConnectionState = {
+  profileId: string;
+  status: "disconnected" | "connecting" | "connected" | "error";
+  error?: string;
+  currentDatabase?: string;
+};
+
+export type DbCatalogInfo = {
+  name: string;
+  current?: boolean;
+};
+
+export type DbProfileInput = {
+  id?: string;
+  name: string;
+  engine: DbEngine;
+  host?: string;
+  port?: number;
+  username?: string;
+  database?: string;
+  filePath?: string;
+  ssl?: boolean;
+  secret?: string;
+  clearSecret?: boolean;
+};
+
+export type DbTableInfo = {
+  schema?: string;
+  name: string;
+  type: "table" | "view";
+};
+
+export type DbColumnInfo = {
+  name: string;
+  type: string;
+  nullable: boolean;
+  key?: string;
+};
+
+export type DbQueryResult = {
+  columns: string[];
+  rows: Array<Record<string, string | number | boolean | null>>;
+  rowCount: number;
+  truncated: boolean;
+  durationMs: number;
+};
+
+export type DbRowValue = string | number | boolean | null;
+
+export type DbEditOp =
+  | {
+      kind: "update";
+      table: string;
+      schema?: string;
+      where: Record<string, DbRowValue>;
+      values: Record<string, DbRowValue>;
+    }
+  | {
+      kind: "insert";
+      table: string;
+      schema?: string;
+      values: Record<string, DbRowValue>;
+    }
+  | {
+      kind: "delete";
+      table: string;
+      schema?: string;
+      where: Record<string, DbRowValue>;
+    };
+
 export type AppSettings = {
   model: string;
   approvalMode: "ask" | "allowlist";
+  theme: ThemePreference;
 };
 
 export type AuthMethod = "oauth" | "api-key";
@@ -201,6 +322,11 @@ export type AppState = {
   auth: AuthStatus;
   detectedUrls: string[];
   browser: BrowserSessionState;
+  browserAttached: boolean;
+  sshProfiles: SshProfile[];
+  sshConnections: SshConnectionState[];
+  dbProfiles: DbProfile[];
+  dbConnections: DbConnectionState[];
 };
 
 export type AgentStreamEvent =
@@ -214,6 +340,9 @@ export type AgentStreamEvent =
   | { type: "todo"; threadId: string; items: TodoItem[] }
   | { type: "approval"; request: PermissionRequest }
   | { type: "dev-server"; url: string }
+  | { type: "browser-focus"; url: string }
+  | { type: "open-file"; path: string }
+  | { type: "ssh-term"; id: string; title: string }
   | { type: "inspect"; element: InspectedElement }
   | { type: "error"; threadId: string; message: string }
   | { type: "done"; threadId: string };
@@ -221,6 +350,7 @@ export type AgentStreamEvent =
 export const DEFAULT_SETTINGS: AppSettings = {
   model: "grok-4.6",
   approvalMode: "allowlist",
+  theme: "system",
 };
 
 export const LOCALHOST_URL_RE = /https?:\/\/(?:localhost|127\.0\.0\.1|0\.0\.0\.0|\[::1\]):\d{2,5}\b/gi;

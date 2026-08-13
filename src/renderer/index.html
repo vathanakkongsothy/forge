@@ -7,11 +7,23 @@
       content="default-src 'self'; script-src 'self' 'unsafe-inline' 'unsafe-eval' blob:; style-src 'self' 'unsafe-inline' blob:; img-src 'self' data: blob:; font-src 'self' data:; worker-src 'self' blob:; connect-src 'self' ws: wss: http://localhost:* http://127.0.0.1:*; frame-src 'self' http://localhost:* http://127.0.0.1:* https:"
     />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>Forge 0.2.0</title>
+    <title>Forge 0.3.0</title>
+    <script>
+      (function () {
+        try {
+          var pref = localStorage.getItem("forge-theme") || "system";
+          var light =
+            pref === "light" ||
+            (pref !== "dark" && window.matchMedia("(prefers-color-scheme: light)").matches);
+          document.documentElement.dataset.theme = light ? "light" : "dark";
+          document.documentElement.style.colorScheme = light ? "light" : "dark";
+        } catch (e) {}
+      })();
+    </script>
   </head>
   <body>
     <div id="root">
-      <div style="height:100vh;display:flex;align-items:center;justify-content:center;background:#0c0d10;color:#e0b044;font-family:Segoe UI,sans-serif;">
+      <div style="height:100vh;display:flex;align-items:center;justify-content:center;background:var(--forge-bg,#0c0d10);color:var(--forge-accent,#e0b044);font-family:Segoe UI,sans-serif;">
         Loading Forge…
       </div>
     </div>

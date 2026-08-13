@@ -40,6 +40,10 @@ function createWindow(): void {
     if (level >= 2) console.error("[renderer]", message);
   });
   win.show();
+  win.webContents.on("will-navigate", (event, url) => {
+    const current = win.webContents.getURL();
+    if (url !== current) event.preventDefault();
+  });
   win.webContents.setWindowOpenHandler((details) => {
     void shell.openExternal(details.url);
     return { action: "deny" };

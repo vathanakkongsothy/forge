@@ -30,6 +30,7 @@ export type ToolContext = {
   runCommand: (command: string) => Promise<{ output: string; urls: string[] }>;
   terminalOutput: (id?: string) => string;
   browser: () => BrowserWorkspace | null;
+  ensureBrowser?: (url?: string) => Promise<BrowserWorkspace>;
   onActivity: (title: string, detail?: string) => void;
 };
 
@@ -204,21 +205,24 @@ export function createToolRegistry(): ForgeTool[] {
   ];
 }
 
-function browser(): ForgeTool[] {
-  const need = (ctx: ToolContext) => {
-    const session = ctx.browser();
-    if (!session) throw new Error("No browser tab is attached. Open the preview first.");
-    return session;
-  };
+async function requireBrowser(ctx: ToolContext, url?: string): Promise<BrowserWorkspace> {
+  if (ctx.ensureBrowser) return ctx.ensureBrowser(url);
+  const session = ctx.browser();
+  if (!session) throw new Error("No browser tab is attached. Open the Browser tab first.");
+  if (url) await session.navigate(url);
+  return session;
+}
 
+function browser(): ForgeTool[] {
   return [
     {
       name: "browser_open",
-      description: "Open or navigate the embedded browser to a URL.",
+      description: "Open or navigate the embedded browser to a URL. Use this to connect to a live page.",
       parameters: z.object({ url: z.string() }),
       execute: async (args, ctx) => {
         ctx.onActivity(`Opening ${args.url}`);
-        return { output: await need(ctx).navigate(String(args.url)), urls: [String(args.url)] };
+        const session = await requireBrowser(ctx, String(args.url));
+        return { output: `Opened ${await session.getUrl()}`, urls: [String(args.url)] };
       },
     },
     {
@@ -227,7 +231,18 @@ function browser(): ForgeTool[] {
       parameters: z.object({ url: z.string() }),
       execute: async (args, ctx) => {
         ctx.onActivity(`Navigating ${args.url}`);
-        return { output: await need(ctx).navigate(String(args.url)) };
+        const session = await requireBrowser(ctx, String(args.url));
+        return { output: `Navigated to ${await session.getUrl()}` };
+      },
+    },
+    {
+      name: "browser_reload",
+      description: "Reload the current page in the embedded browser.",
+      parameters: z.object({}),
+      execute: async (_args, ctx) => {
+        const session = await requireBrowser(ctx);
+        await session.reload();
+        return { output: `Reloaded ${await session.getUrl()}` };
       },
     },
     {
@@ -236,26 +251,30 @@ function browser(): ForgeTool[] {
       parameters: z.object({ selector: z.string() }),
       execute: async (args, ctx) => {
         ctx.onActivity(`Clicking ${args.selector}`);
-        return { output: await need(ctx).click(String(args.selector)) };
+        return { output: await (await requireBrowser(ctx)).click(String(args.selector)) };
       },
     },
     {
       name: "browser_type",
       description: "Type into an input found by CSS selector.",
       parameters: z.object({ selector: z.string(), text: z.string() }),
-      execute: async (args, ctx) => ({ output: await need(ctx).type(String(args.selector), String(args.text)) }),
+      execute: async (args, ctx) => ({
+        output: await (await requireBrowser(ctx)).type(String(args.selector), String(args.text)),
+      }),
     },
     {
       name: "browser_press",
       description: "Press a keyboard key in the page.",
       parameters: z.object({ key: z.string() }),
-      execute: async (args, ctx) => ({ output: await need(ctx).press(String(args.key)) }),
+      execute: async (args, ctx) => ({ output: await (await requireBrowser(ctx)).press(String(args.key)) }),
     },
     {
       name: "browser_scroll",
       description: "Scroll the page.",
       parameters: z.object({ dx: z.number().default(0), dy: z.number().default(400) }),
-      execute: async (args, ctx) => ({ output: await need(ctx).scroll(Number(args.dx ?? 0), Number(args.dy ?? 400)) }),
+      execute: async (args, ctx) => ({
+        output: await (await requireBrowser(ctx)).scroll(Number(args.dx ?? 0), Number(args.dy ?? 400)),
+      }),
     },
     {
       name: "browser_screenshot",
@@ -263,28 +282,28 @@ function browser(): ForgeTool[] {
       parameters: z.object({}),
       execute: async (_args, ctx) => {
         ctx.onActivity("Capturing screenshot");
-        const image = await need(ctx).screenshot();
-        return { output: "screenshot captured", image };
+        const image = await (await requireBrowser(ctx)).screenshot();
+        return { output: `screenshot captured (${image.length} bytes base64)`, image };
       },
     },
     {
       name: "browser_get_dom",
       description: "Get a truncated HTML snapshot of the page.",
       parameters: z.object({}),
-      execute: async (_args, ctx) => ({ output: await need(ctx).getDom() }),
+      execute: async (_args, ctx) => ({ output: await (await requireBrowser(ctx)).getDom() }),
     },
     {
       name: "browser_get_text",
       description: "Get visible text from the page.",
       parameters: z.object({}),
-      execute: async (_args, ctx) => ({ output: await need(ctx).getText() }),
+      execute: async (_args, ctx) => ({ output: await (await requireBrowser(ctx)).getText() }),
     },
     {
       name: "browser_evaluate",
       description: "Evaluate JavaScript in the page.",
       parameters: z.object({ expression: z.string() }),
       execute: async (args, ctx) => {
-        const value = await need(ctx).evaluate(String(args.expression));
+        const value = await (await requireBrowser(ctx)).evaluate(String(args.expression));
         return { output: typeof value === "string" ? value : JSON.stringify(value) };
       },
     },
@@ -292,26 +311,28 @@ function browser(): ForgeTool[] {
       name: "browser_wait",
       description: "Wait a number of milliseconds.",
       parameters: z.object({ ms: z.number().int().positive() }),
-      execute: async (args, ctx) => ({ output: await need(ctx).wait(Number(args.ms)) }),
+      execute: async (args, ctx) => ({ output: await (await requireBrowser(ctx)).wait(Number(args.ms)) }),
     },
     {
       name: "browser_get_url",
       description: "Return the current page URL.",
       parameters: z.object({}),
-      execute: async (_args, ctx) => ({ output: await need(ctx).getUrl() }),
+      execute: async (_args, ctx) => ({ output: await (await requireBrowser(ctx)).getUrl() }),
     },
     {
       name: "browser_console",
       description: "Read captured browser console logs.",
       parameters: z.object({}),
-      execute: async (_args, ctx) => ({ output: JSON.stringify(need(ctx).consoleDump(), null, 2) }),
+      execute: async (_args, ctx) => ({
+        output: JSON.stringify((await requireBrowser(ctx)).consoleDump(), null, 2),
+      }),
     },
     {
       name: "browser_errors",
       description: "Read browser console errors and failed network requests.",
       parameters: z.object({}),
       execute: async (_args, ctx) => {
-        const session = need(ctx);
+        const session = await requireBrowser(ctx);
         return {
           output: JSON.stringify(
             { console: session.consoleDump(true), network: session.networkDump(true) },
@@ -326,7 +347,7 @@ function browser(): ForgeTool[] {
       description: "Read captured network requests.",
       parameters: z.object({ failedOnly: z.boolean().optional() }),
       execute: async (args, ctx) => ({
-        output: JSON.stringify(need(ctx).networkDump(Boolean(args.failedOnly)), null, 2),
+        output: JSON.stringify((await requireBrowser(ctx)).networkDump(Boolean(args.failedOnly)), null, 2),
       }),
     },
     {
@@ -334,7 +355,7 @@ function browser(): ForgeTool[] {
       description: "Inspect a DOM element by selector, or return the user-selected inspect target.",
       parameters: z.object({ selector: z.string().optional() }),
       execute: async (args, ctx) => {
-        const session = need(ctx);
+        const session = await requireBrowser(ctx);
         if (args.selector) {
           const el = await session.inspectSelector(String(args.selector));
           return { output: JSON.stringify(el, null, 2) };
@@ -348,7 +369,7 @@ function browser(): ForgeTool[] {
       description: "Get computed CSS for a selector.",
       parameters: z.object({ selector: z.string() }),
       execute: async (args, ctx) => ({
-        output: JSON.stringify(await need(ctx).computedStyle(String(args.selector)), null, 2),
+        output: JSON.stringify(await (await requireBrowser(ctx)).computedStyle(String(args.selector)), null, 2),
       }),
     },
   ];

@@ -12,8 +12,8 @@ const buttonVariants = cva(
         secondary: "bg-secondary text-foreground hover:bg-border",
         ghost: "text-muted hover:bg-secondary hover:text-foreground",
         outline: "border border-border bg-transparent hover:bg-secondary",
-        danger: "bg-red-500/15 text-red-300 hover:bg-red-500/25",
-        success: "bg-emerald-500/15 text-emerald-300 hover:bg-emerald-500/25",
+        danger: "bg-red-500/15 text-[color:var(--forge-err)] hover:bg-red-500/25",
+        success: "bg-emerald-500/15 text-[color:var(--forge-ok)] hover:bg-emerald-500/25",
       },
       size: {
         default: "h-8 px-3",

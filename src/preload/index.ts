@@ -1,5 +1,19 @@
 import { contextBridge, ipcRenderer } from "electron";
-import type { AgentStreamEvent, AppSettings, AppState, FileEntry, GitSnapshot, OpenFile } from "@forge/shared";
+import type {
+  AgentStreamEvent,
+  AppSettings,
+  AppState,
+  DbCatalogInfo,
+  DbColumnInfo,
+  DbEditOp,
+  DbProfileInput,
+  DbQueryResult,
+  DbTableInfo,
+  FileEntry,
+  GitSnapshot,
+  OpenFile,
+  SshProfileInput,
+} from "@forge/shared";
 
 const api = {
   getState: (): Promise<AppState> => ipcRenderer.invoke("forge:getState"),
@@ -46,6 +60,26 @@ const api = {
   browserBack: (): Promise<AppState> => ipcRenderer.invoke("forge:browserBack"),
   browserForward: (): Promise<AppState> => ipcRenderer.invoke("forge:browserForward"),
   browserClearHistory: (): Promise<AppState> => ipcRenderer.invoke("forge:browserClearHistory"),
+  openLink: (href: string): Promise<{ ok: boolean; action: string }> => ipcRenderer.invoke("forge:openLink", href),
+  sshSave: (input: SshProfileInput): Promise<AppState> => ipcRenderer.invoke("forge:sshSave", input),
+  sshDelete: (id: string): Promise<AppState> => ipcRenderer.invoke("forge:sshDelete", id),
+  sshConnect: (id: string): Promise<AppState> => ipcRenderer.invoke("forge:sshConnect", id),
+  sshDisconnect: (id: string): Promise<AppState> => ipcRenderer.invoke("forge:sshDisconnect", id),
+  sshPickKey: (): Promise<string | null> => ipcRenderer.invoke("forge:sshPickKey"),
+  dbSave: (input: DbProfileInput): Promise<AppState> => ipcRenderer.invoke("forge:dbSave", input),
+  dbDelete: (id: string): Promise<AppState> => ipcRenderer.invoke("forge:dbDelete", id),
+  dbConnect: (id: string): Promise<AppState> => ipcRenderer.invoke("forge:dbConnect", id),
+  dbDisconnect: (id: string): Promise<AppState> => ipcRenderer.invoke("forge:dbDisconnect", id),
+  dbDatabases: (id: string): Promise<DbCatalogInfo[]> => ipcRenderer.invoke("forge:dbDatabases", id),
+  dbOpen: (id: string, database: string): Promise<AppState> => ipcRenderer.invoke("forge:dbOpen", { id, database }),
+  dbTables: (id: string): Promise<DbTableInfo[]> => ipcRenderer.invoke("forge:dbTables", id),
+  dbColumns: (id: string, table: string, schema?: string): Promise<DbColumnInfo[]> =>
+    ipcRenderer.invoke("forge:dbColumns", { id, table, schema }),
+  dbQuery: (id: string, sql: string, confirm?: boolean): Promise<DbQueryResult> =>
+    ipcRenderer.invoke("forge:dbQuery", { id, sql, confirm }),
+  dbApplyEdits: (id: string, ops: DbEditOp[]): Promise<{ applied: number }> =>
+    ipcRenderer.invoke("forge:dbApplyEdits", { id, ops }),
+  dbPickSqlite: (): Promise<string | null> => ipcRenderer.invoke("forge:dbPickSqlite"),
   onEvent: (handler: (event: AgentStreamEvent) => void): (() => void) => {
     const listener = (_e: unknown, payload: AgentStreamEvent) => handler(payload);
     ipcRenderer.on("forge:event", listener);

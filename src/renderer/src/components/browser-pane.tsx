@@ -27,31 +27,53 @@ export function BrowserPane({
   useEffect(() => {
     const view = ref.current;
     if (!view) return;
-    const ready = () => {
+    let tries = 0;
+    const attach = () => {
       try {
         const id = view.getWebContentsId();
-        void window.forge.browserAttach(id);
+        if (id) void window.forge.browserAttach(id);
       } catch {
-        /* not attached yet */
+        if (tries++ < 25) window.setTimeout(attach, 200);
       }
     };
     const onStart = () => setLoading(true);
     const onStop = () => {
       setLoading(false);
-      const current = view.getURL();
-      const title = view.getTitle();
-      onUrl(current);
-      void window.forge.browserRecord(current, title);
+      try {
+        const current = view.getURL();
+        const title = view.getTitle();
+        if (current) {
+          onUrl(current);
+          void window.forge.browserRecord(current, title);
+        }
+      } catch {
+        /* webview not ready */
+      }
     };
-    view.addEventListener("dom-ready", ready);
+    view.addEventListener("dom-ready", attach);
+    view.addEventListener("did-attach", attach);
     view.addEventListener("did-start-loading", onStart);
     view.addEventListener("did-stop-loading", onStop);
+    attach();
     return () => {
-      view.removeEventListener("dom-ready", ready);
+      view.removeEventListener("dom-ready", attach);
+      view.removeEventListener("did-attach", attach);
       view.removeEventListener("did-start-loading", onStart);
       view.removeEventListener("did-stop-loading", onStop);
     };
-  }, [onUrl, url]);
+  }, [onUrl]);
+
+  useEffect(() => {
+    const view = ref.current;
+    const target = normalizeBrowserUrl(url) || "about:blank";
+    if (!view || !target) return;
+    try {
+      const current = view.getURL();
+      if (current && current !== target) view.loadURL(target);
+    } catch {
+      /* wait for attach */
+    }
+  }, [url]);
 
   useEffect(() => {
     void window.forge.browserInspect(inspect).catch(() => undefined);
@@ -161,24 +183,14 @@ export function BrowserPane({
           Inspect
         </Button>
       </div>
-      {url && url !== "about:blank" ? (
-        <webview
-          ref={(el) => {
-            ref.current = el as unknown as Electron.WebviewTag | null;
-          }}
-          src={url}
-          className="min-h-0 flex-1"
-        />
-      ) : (
-        <div className="flex min-h-0 flex-1 flex-col items-center justify-center gap-2 text-sm text-muted">
-          <div>Enter a URL or open a remembered page.</div>
-          {visits[0] ? (
-            <Button size="sm" variant="secondary" onClick={() => void go(visits[0].url)}>
-              Resume {visits[0].url}
-            </Button>
-          ) : null}
-        </div>
-      )}
+      <webview
+        ref={(el) => {
+          ref.current = el as unknown as Electron.WebviewTag | null;
+        }}
+        src={url && url !== "about:blank" ? url : "about:blank"}
+        allowpopups={true}
+        className="min-h-0 flex-1"
+      />
     </div>
   );
 }

@@ -1,4 +1,5 @@
 import { lazy, Suspense, useEffect, useState } from "react";
+import { useResolvedTheme } from "@/lib/use-resolved-theme";
 import type { OpenFile, PendingDiff } from "@forge/shared";
 import { MarkdownView } from "@/components/markdown-view";
 import { Button } from "@/components/ui/button";
@@ -27,6 +28,7 @@ export function EditorPane(props: {
   const selectedDiff = props.diffs[0];
   const markdown = isMarkdownFile(active);
   const [mode, setMode] = useState<"preview" | "source">(markdown ? "preview" : "source");
+  const theme = useResolvedTheme();
 
   useEffect(() => {
     setMode(isMarkdownFile(active) ? "preview" : "source");
@@ -85,7 +87,7 @@ export function EditorPane(props: {
         <div className="min-h-0 flex-1">
           <Suspense fallback={<div className="p-4 text-xs text-muted">Loading editor…</div>}>
             <Monaco
-              theme="vs-dark"
+              theme={theme === "light" ? "vs" : "vs-dark"}
               path={active.path}
               language={active.language}
               value={active.contents}

@@ -22,6 +22,7 @@ export type RunAgentInput = {
   userText: string;
   history: ChatBlock[];
   inspectedJson?: string;
+  browserBrief?: string;
   abortSignal: AbortSignal;
   context: Omit<ToolContext, "onActivity">;
   hooks: AgentHooks;
@@ -31,6 +32,12 @@ const running = new Map<string, AbortController>();
 
 export function stopAgent(threadId: string): void {
   running.get(threadId)?.abort();
+  running.delete(threadId);
+}
+
+export function isAgentRunning(threadId?: string): boolean {
+  if (threadId) return running.has(threadId);
+  return running.size > 0;
 }
 
 export async function runAgent(input: RunAgentInput): Promise<void> {
@@ -60,7 +67,7 @@ export async function runAgent(input: RunAgentInput): Promise<void> {
   try {
     const result = streamText({
       model: xai.responses(input.model),
-      system: systemPrompt(input.workspaceRoot, input.inspectedJson),
+      system: systemPrompt(input.workspaceRoot, input.inspectedJson, input.browserBrief),
       messages: toMessages(input.history, input.userText),
       tools,
       stopWhen: stepCountIs(28),

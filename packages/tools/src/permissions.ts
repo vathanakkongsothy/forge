@@ -15,6 +15,9 @@ export const SAFE_TOOLS = new Set([
   "git_diff",
   "git_log",
   "terminal_output",
+  "browser_open",
+  "browser_navigate",
+  "browser_reload",
   "browser_screenshot",
   "browser_get_dom",
   "browser_get_text",
@@ -25,6 +28,7 @@ export const SAFE_TOOLS = new Set([
   "browser_inspect_element",
   "browser_computed_style",
   "browser_wait",
+  "browser_scroll",
 ]);
 
 export function commandRisk(command: string): PermissionLevel {

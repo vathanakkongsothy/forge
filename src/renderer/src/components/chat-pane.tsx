@@ -30,12 +30,15 @@ export function ChatPane({
   thread,
   hasApiKey,
   model,
+  browserLive = false,
 }: {
   thread: Thread;
   hasApiKey: boolean;
   model: string;
+  browserLive?: boolean;
 }) {
   const [draft, setDraft] = useState("");
+  const [sendError, setSendError] = useState<string | null>(null);
   const endRef = useRef<HTMLDivElement>(null);
   const listRef = useRef<HTMLDivElement>(null);
   const running = thread.status === "running";
@@ -52,11 +55,18 @@ export function ChatPane({
     }
   }, [thread.blocks.length, thread.status, thread.updatedAt]);
 
-  function send() {
+  async function send() {
     const text = draft.trim();
     if (!text || running || !hasApiKey) return;
     setDraft("");
-    void window.forge.sendMessage(thread.id, text);
+    setSendError(null);
+    try {
+      await window.forge.sendMessage(thread.id, text);
+    } catch (err) {
+      const message = err instanceof Error ? err.message : String(err);
+      setDraft(text);
+      setSendError(message.replace(/^Error invoking remote method 'forge:sendMessage':\s*/i, ""));
+    }
   }
 
   return (
@@ -67,6 +77,17 @@ export function ChatPane({
           <div className="truncate text-[13px] font-medium leading-5">{thread.title}</div>
           <div className="text-[10px] uppercase tracking-[0.16em] text-muted">{status.label}</div>
         </div>
+        <span
+          className={cn(
+            "rounded-full border px-2 py-0.5 text-[10px]",
+            browserLive
+              ? "border-[color:var(--forge-ok)]/40 bg-[color:var(--forge-ok)]/10 text-[color:var(--forge-ok)]"
+              : "border-border bg-secondary text-muted",
+          )}
+          title={browserLive ? "Agent can read and control the Browser tab" : "Open the Browser tab to attach"}
+        >
+          {browserLive ? "Browser live" : "Browser off"}
+        </span>
         <span className="hidden rounded-full border border-accent/30 bg-accent/10 px-2 py-0.5 text-[10px] text-accent sm:inline">
           {modelLabel}
         </span>
@@ -105,6 +126,11 @@ export function ChatPane({
           Sign in with Grok in Settings to start the agent. An API key still works as a fallback.
         </div>
       ) : null}
+      {sendError ? (
+        <div className="mx-3 mb-2 rounded-lg border border-[color:var(--forge-err)]/30 bg-[color:var(--forge-err)]/10 px-3 py-2 text-[11px] leading-4 text-[color:var(--forge-err)]">
+          {sendError}
+        </div>
+      ) : null}
 
       <div className="border-t border-border bg-card/80 p-2.5">
         <div className="rounded-xl border border-border bg-secondary focus-within:border-accent/50">
@@ -117,7 +143,7 @@ export function ChatPane({
             onKeyDown={(e) => {
               if (e.key === "Enter" && !e.shiftKey) {
                 e.preventDefault();
-                send();
+                void send();
               }
             }}
           />
@@ -203,9 +229,31 @@ function UserBubble({ text }: { text: string }) {
   return (
     <div className="flex justify-end">
       <div className="max-w-[92%] rounded-2xl rounded-br-md bg-accent/15 px-3 py-2 text-[13px] leading-5">
-        {text}
+        <LinkifiedText text={text} />
       </div>
     </div>
+  );
+}
+
+function LinkifiedText({ text }: { text: string }) {
+  const parts = text.split(/(https?:\/\/[^\s<>)"']+)/g);
+  return (
+    <>
+      {parts.map((part, index) =>
+        /^https?:\/\//.test(part) ? (
+          <button
+            key={`${part}-${index}`}
+            type="button"
+            className="break-all text-accent underline underline-offset-2"
+            onClick={() => void window.forge.openLink(part)}
+          >
+            {part}
+          </button>
+        ) : (
+          <span key={index}>{part}</span>
+        ),
+      )}
+    </>
   );
 }
 
@@ -290,7 +338,7 @@ function TodoCard({ items }: { items: TodoItem[] }) {
         {items.map((item) => (
           <div key={item.id} className="flex items-start gap-2 text-[12px] leading-4">
             {item.status === "completed" ? (
-              <Check className="mt-0.5 h-3.5 w-3.5 shrink-0 text-emerald-400" />
+              <Check className="mt-0.5 h-3.5 w-3.5 shrink-0 text-[color:var(--forge-ok)]" />
             ) : item.status === "in_progress" ? (
               <Loader2 className="mt-0.5 h-3.5 w-3.5 shrink-0 animate-spin text-accent" />
             ) : (
@@ -316,12 +364,25 @@ function ToolRow({ tool }: { tool: ToolCard }) {
         ) : tool.status === "error" ? (
           <span className="h-2 w-2 shrink-0 rounded-full bg-red-400" />
         ) : tool.status === "done" ? (
-          <Check className="h-3.5 w-3.5 shrink-0 text-emerald-400" />
+          <Check className="h-3.5 w-3.5 shrink-0 text-[color:var(--forge-ok)]" />
         ) : (
           <Icon className="h-3.5 w-3.5 shrink-0 text-accent" />
         )}
         <span className="shrink-0 font-mono text-[11px] text-accent">{friendlyTool(tool.name)}</span>
-        {arg ? <span className="min-w-0 truncate text-[11px] text-muted">{arg}</span> : null}
+        {arg ? (
+          <button
+            type="button"
+            className="min-w-0 truncate text-left text-[11px] text-muted underline-offset-2 hover:text-accent hover:underline"
+            title={arg}
+            onClick={(event) => {
+              event.preventDefault();
+              event.stopPropagation();
+              void window.forge.openLink(arg);
+            }}
+          >
+            {arg}
+          </button>
+        ) : null}
       </summary>
       {tool.output ? (
         <pre className="max-h-32 overflow-auto border-t border-border/70 bg-background/40 px-2.5 py-2 font-mono text-[11px] leading-4 text-muted">

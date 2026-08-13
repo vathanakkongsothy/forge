@@ -6,7 +6,8 @@ declare namespace React {
     interface IntrinsicElements {
       webview: React.DetailedHTMLProps<React.HTMLAttributes<HTMLElement>, HTMLElement> & {
         src?: string;
-        allowpopups?: string | boolean;
+        allowpopups?: string | boolean | "true" | "false";
+        partition?: string;
       };
     }
   }
