@@ -1,0 +1,29 @@
+{
+  "compilerOptions": {
+    "target": "ES2022",
+    "lib": ["ES2022"],
+    "module": "ESNext",
+    "moduleResolution": "bundler",
+    "strict": true,
+    "noEmit": true,
+    "skipLibCheck": true,
+    "types": ["node"],
+    "baseUrl": ".",
+    "paths": {
+      "@forge/shared": ["packages/shared/src/index.ts"],
+      "@forge/database": ["packages/database/src/index.ts"],
+      "@forge/git": ["packages/git/src/index.ts"],
+      "@forge/terminal": ["packages/terminal/src/index.ts"],
+      "@forge/browser": ["packages/browser/src/index.ts"],
+      "@forge/tools": ["packages/tools/src/index.ts"],
+      "@forge/agent-core": ["packages/agent-core/src/index.ts"],
+      "@forge/oauth": ["packages/oauth/src/index.ts"]
+    }
+  },
+  "include": [
+    "electron.vite.config.ts",
+    "src/main/**/*",
+    "src/preload/**/*",
+    "packages/**/*.ts"
+  ]
+}

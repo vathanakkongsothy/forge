@@ -1,0 +1,20 @@
+{
+  "name": "@forge/agent-host",
+  "version": "0.2.0",
+  "private": true,
+  "type": "module",
+  "main": "./src/index.ts",
+  "scripts": {
+    "start": "node --import tsx src/index.ts"
+  },
+  "dependencies": {
+    "@forge/agent-core": "0.1.0",
+    "@forge/browser": "0.1.0",
+    "@forge/database": "0.1.0",
+    "@forge/git": "0.1.0",
+    "@forge/oauth": "0.1.0",
+    "@forge/shared": "0.1.0",
+    "@forge/terminal": "0.1.0",
+    "@forge/tools": "0.1.0"
+  }
+}

@@ -1,0 +1,52 @@
+appId: app.phumi.forge
+productName: Forge
+copyright: Copyright © 2026 Phumi
+directories:
+  buildResources: build
+  output: release
+files:
+  - out/**/*
+  - "!src/**/*"
+  - "!packages/**/*"
+  - "!scripts/**/*"
+  - "!dist/**/*"
+  - "!electron.vite.config.ts"
+  - "!{tsconfig.json,tsconfig.node.json,tsconfig.web.json,components.json}"
+  - "!README.md"
+  - "!node_modules/monaco-editor/**/*"
+  - "!node_modules/@monaco-editor/**/*"
+  - "!node_modules/playwright-core/**/*"
+  - "!node_modules/react/**/*"
+  - "!node_modules/react-dom/**/*"
+  - "!node_modules/lucide-react/**/*"
+  - "!node_modules/@xterm/**/*"
+  - "!node_modules/react-resizable-panels/**/*"
+  - "!node_modules/@radix-ui/**/*"
+  - "!node_modules/class-variance-authority/**/*"
+  - "!node_modules/clsx/**/*"
+  - "!node_modules/tailwind-merge/**/*"
+asar: true
+asarUnpack:
+  - node_modules/better-sqlite3/**/*
+  - node_modules/node-pty/**/*
+npmRebuild: false
+electronLanguages:
+  - en-US
+win:
+  executableName: Forge
+  icon: build/icon.png
+  target:
+    - target: nsis
+      arch:
+        - x64
+nsis:
+  oneClick: true
+  perMachine: false
+  allowElevation: false
+  allowToChangeInstallationDirectory: false
+  createDesktopShortcut: always
+  createStartMenuShortcut: true
+  shortcutName: Forge
+  uninstallDisplayName: Forge
+  artifactName: Forge-Setup-${version}.${ext}
+  deleteAppDataOnUninstall: false

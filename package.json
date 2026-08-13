@@ -1,0 +1,60 @@
+{
+  "name": "forge",
+  "version": "0.2.0",
+  "private": true,
+  "author": "Phumi",
+  "description": "Ask → Code → Run → See → Inspect → Fix → Verify → Commit",
+  "main": "./out/main/index.js",
+  "type": "module",
+  "workspaces": [
+    "packages/*"
+  ],
+  "scripts": {
+    "dev": "electron-vite dev",
+    "build": "electron-vite build",
+    "preview": "electron-vite preview",
+    "typecheck": "tsc --noEmit -p tsconfig.node.json --composite false && tsc --noEmit -p tsconfig.web.json --composite false",
+    "dist": "electron-vite build && electron-builder --win nsis",
+    "website:dev": "npm --prefix apps/website run dev",
+    "website:build": "npm --prefix apps/website run build"
+  },
+  "dependencies": {
+    "@ai-sdk/xai": "^2.0.0",
+    "@electron-toolkit/utils": "^4.0.0",
+    "@monaco-editor/react": "^4.7.0",
+    "@radix-ui/react-slot": "^1.2.3",
+    "@xterm/addon-fit": "^0.10.0",
+    "@xterm/xterm": "^5.5.0",
+    "ai": "^5.0.0",
+    "class-variance-authority": "^0.7.1",
+    "clsx": "^2.1.1",
+    "lucide-react": "^0.542.0",
+    "monaco-editor": "^0.52.2",
+    "playwright-core": "^1.55.0",
+    "react": "^19.1.1",
+    "react-dom": "^19.1.1",
+    "react-markdown": "^10.1.0",
+    "react-resizable-panels": "^3.0.4",
+    "remark-gfm": "^4.0.1",
+    "tailwind-merge": "^3.3.1",
+    "zod": "^4.1.5"
+  },
+  "optionalDependencies": {
+    "better-sqlite3": "^12.2.0",
+    "node-pty": "^1.0.0"
+  },
+  "devDependencies": {
+    "@electron-toolkit/tsconfig": "^1.0.1",
+    "@tailwindcss/vite": "^4.1.12",
+    "@types/node": "^22.18.0",
+    "@types/react": "^19.1.12",
+    "@types/react-dom": "^19.1.9",
+    "@vitejs/plugin-react": "^5.0.2",
+    "electron": "^37.3.1",
+    "electron-builder": "^26.15.3",
+    "electron-vite": "^4.0.0",
+    "tailwindcss": "^4.1.12",
+    "typescript": "^5.9.2",
+    "vite": "^7.1.3"
+  }
+}

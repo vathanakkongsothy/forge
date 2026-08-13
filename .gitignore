@@ -1,0 +1,11 @@
+node_modules
+out
+dist
+release
+src-tauri/target
+.DS_Store
+*.log
+.env
+.env.*
+.wrangler
+apps/website/public/downloads/*.exe

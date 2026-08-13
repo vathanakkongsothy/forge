@@ -1,0 +1,14 @@
+{
+  "name": "@forge/tools",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "main": "./src/index.ts",
+  "types": "./src/index.ts",
+  "dependencies": {
+    "@forge/browser": "0.1.0",
+    "@forge/git": "0.1.0",
+    "@forge/shared": "0.1.0",
+    "zod": "^4.1.5"
+  }
+}
