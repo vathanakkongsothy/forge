@@ -4,6 +4,7 @@
   "private": true,
   "author": "Phumi",
   "description": "Ask → Code → Run → See → Inspect → Fix → Verify → Commit",
+  "desktopName": "Forge",
   "main": "./out/main/index.js",
   "type": "module",
   "workspaces": [
@@ -15,6 +16,9 @@
     "preview": "electron-vite preview",
     "typecheck": "tsc --noEmit -p tsconfig.node.json --composite false && tsc --noEmit -p tsconfig.web.json --composite false",
     "dist": "electron-vite build && electron-builder --win nsis",
+    "dist:win": "electron-vite build && electron-builder --win nsis",
+    "dist:mac": "electron-vite build && electron-builder --mac",
+    "dist:linux": "electron-vite build && electron-builder --linux",
     "website:dev": "npm --prefix apps/website run dev",
     "website:build": "npm --prefix apps/website run build"
   },
