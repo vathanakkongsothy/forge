@@ -50,3 +50,34 @@ nsis:
   uninstallDisplayName: Forge
   artifactName: Forge-Setup-${version}.${ext}
   deleteAppDataOnUninstall: false
+mac:
+  executableName: Forge
+  icon: build/icon.png
+  category: public.app-category.developer-tools
+  target:
+    - target: dmg
+      arch:
+        - universal
+    - target: zip
+      arch:
+        - universal
+  artifactName: Forge-${version}.${ext}
+  # Unsigned/ad-hoc builds for beta distribution. See README for signed/notarized setup.
+  gatekeeperAssess: false
+  hardenedRuntime: false
+linux:
+  executableName: forge
+  icon: build/icon.png
+  category: Development
+  maintainer: Phumi
+  synopsis: AI coding workspace
+  description: Forge — Ask, code, run, inspect, and commit in one desktop workspace.
+  syncDesktopName: true
+  target:
+    - target: AppImage
+      arch:
+        - x64
+    - target: deb
+      arch:
+        - x64
+  artifactName: Forge-${version}.${ext}
